@@ -1,4 +1,4 @@
-import boto3, tarfile, os, shutil
+import boto3, tarfile, os, shutil, datetime
 
 s3resource = None
 
@@ -21,7 +21,8 @@ def main():
     for file in objects["Contents"][:1]:
         key = file["Key"]
         if key.endswith('.tar'):
-            #downloadFile(source_bucket, key)
+            # UNCOMMENT ONCE ALREADY GET THE FILE, OR DO CHECK FOR EXISTING
+            # downloadFile(source_bucket, key) 
             #copyFileToS3(source_bucket, key)
             pass
 
@@ -63,43 +64,49 @@ def downloadFile(source_bucket, key):
 
 
 def extractFile(filename):
+    # Add date to error log
+    log = open('error_log.txt', 'a')
+    log.write('\n' + datetime.datetime.now().isoformat() + '\n')
+
+    # Process if filename is a .tar file
     if not tarfile.is_tarfile(filename):
         print('can\'t unzip, not a .tar file')
         return
-
-    # Proceed if filename is a .tar file
-    print('Unzipping ' + filename + '...')
+    print('Processing ' + filename + '...')
     tar = tarfile.open(filename)
-    for item in tar:
-        # Extract from .tar into 'temp' subfolder only if .gz
-        if item.name.endswith('.gz'):
-            item.name = os.path.basename(item.name) # reset path to remove parent directories like '0001'
-            # Ensure 'temp' folder exists
-            if not os.path.isdir('temp'):
-                os.makedirs('temp')
-            tar.extract(item, path='temp')
-            # Extract from .gz into 'temp' subfolder only if .tex
+    for subfile in tar.getmembers():
+        # Open .tar subfile only if .gz
+        if subfile.name.endswith('.gz'):
             try: 
-                print('Unzipping ' + item.name + '...')
-                gz = tarfile.open('temp/' + item.name, mode='r:gz')
-                # Only extract .tex files
-                for file in gz:
-                    if file.name.endswith('.tex'):
-                        # Then read into the file and see if it starts with \document
-                        gz.extract(file, path='latex')
-                print(item.name + ' extracted successfully')
+                print('Processing ' + filename + '/' + subfile.name + '...')
+                gz = tar.extractfile(subfile)
+                gz = tarfile.open(fileobj=gz)
+                # Extract file from .gz into 'latex' subfolder only if .tex
+                for subsubfile in gz.getmembers():
+                    if subsubfile.name.endswith('.tex'):
+                        gz.extract(subsubfile, path='latex')
+                print(subfile.name + ' extracted successfully')
             except tarfile.ReadError:
-                # Move to 'error' folder, ensuring it exists
-                if not os.path.isdir('error'):
-                    os.makedirs('error')
-                os.rename('temp/' + item.name, 'error/' + item.name)
-                print('error extracting ' + item.name + '...')
-            gz.close()
+                # Append subfile name to error log
+                print('error extracting ' + subfile.name + '...')
+                log.write(subfile.name + '\n')
     tar.close()
-    print(filename + ' extracted successfully')
-    shutil.rmtree('temp')
+    log.close()
+    print(filename + ' processed successfully')
 
 
 # If file is being run as a script on the command line
 if __name__ == '__main__':
     main()
+
+
+
+# NEXT STEPS:
+# 1) Why are many .gz files throwing ReadErrors?
+# 2) Do I need to actually extract the .tar and all the .gz?
+# 3) Check each .tex file and only extract the ones that start with \document
+# 4) In a different program, parse each .tex file for words (with latex module?)
+# 5) Check if have existing .tar before downloading & writing over
+# 6) Close any gz/tar files? 
+
+
