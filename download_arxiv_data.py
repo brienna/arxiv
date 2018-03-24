@@ -22,8 +22,8 @@ def main():
         key = file["Key"]
         if key.endswith('.tar'):
             # UNCOMMENT ONCE ALREADY GET THE FILE, OR DO CHECK FOR EXISTING
-            # downloadFile(source_bucket, key) 
-            #copyFileToS3(source_bucket, key)
+            downloadFile(source_bucket, key) 
+            # copyFileToS3(source_bucket, key)
             pass
 
     # unzip .tar file
@@ -75,8 +75,9 @@ def extractFile(filename):
     print('Processing ' + filename + '...')
     tar = tarfile.open(filename)
     for subfile in tar.getmembers():
-        # Open .tar subfile only if .gz
-        if subfile.name.endswith('.gz'):
+        # Open .tar subfile only if .gz and begins with 'astro-ph'
+        if subfile.name.endswith('.gz') and 'astro-ph' in subfile.name:
+            print('opening ' + subfile.name)
             try: 
                 print('Processing ' + filename + '/' + subfile.name + '...')
                 gz = tar.extractfile(subfile)
