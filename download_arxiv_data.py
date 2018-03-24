@@ -1,4 +1,5 @@
-import boto3, tarfile, os, shutil, datetime
+import boto3, tarfile, os, shutil, datetime, sys
+from TexSoup import TexSoup
 
 s3resource = None
 
@@ -24,12 +25,13 @@ def setup():
         key = file["Key"]
         if key.endswith('.tar'):
             if os.path.exists(key):
-                print(key + ' already has been downloaded and extracted')
+                print(key + ' already has been downloaded and extracted.')
                 continue;
             else:
                 downloadFile(source_bucket, key)
                 extractFile(key)
-                parseFiles()
+
+    parseFiles()
     
     # copyFileToS3(source_bucket, key)
 
@@ -103,6 +105,9 @@ def extractFile(filename):
         Name of file to extract
     """
 
+    total_successful = 0
+    total = 0
+
     # Start new section in error log
     log = open('error_log.txt', 'a')
     log.write('\n' + datetime.datetime.now().isoformat() + '\n')
@@ -116,6 +121,7 @@ def extractFile(filename):
     for subfile in tar.getmembers():
         # Open .tar subfile only if .gz and begins with 'astro-ph'
         if subfile.name.endswith('.gz') and 'astro-ph' in subfile.name:
+            total = total + 1
             print('opening ' + subfile.name)
             try: 
                 print('Processing ' + filename + '/' + subfile.name + '...')
@@ -126,17 +132,45 @@ def extractFile(filename):
                     if subsubfile.name.endswith('.tex'):
                         gz.extract(subsubfile, path='latex')
                 print(subfile.name + ' extracted successfully')
+                total_successful = total_successful + 1
             except tarfile.ReadError:
                 # If error extracting subfile, register in error log
                 print('error extracting ' + subfile.name + '...')
                 log.write(subfile.name + '\n')
     tar.close()
     log.close()
-    print(filename + ' processed successfully')
+
+    print(filename + ' extraction complete.')
+    print('Extraction results for ' + filename + '...')
+    print('Total number of astro-ph .gz files: ' + str(total))
+    print('Total number of astro-ph .gz files successfully extracted: ' + str(total_successful))
+
+
+def parseFiles():
+    """Parses downloaded document .tex files for word content"""
+
+    words = []  # may want to change data structure later
+
+    for file in os.listdir("latex"):
+        if file.endswith('.tex'):
+            print('\nChecking ' + file + '...')
+            with open("latex/" + file) as f:
+                try:
+                    soup = TexSoup(f)
+                    # If .tex is document (defined as having /begin{document},
+                    # which is accessible by soup.document),
+                    # parse its sections for words, maintaining word order
+                    if soup.document:
+                        print(file + ' is a document, now parsing...')
+                        print(soup.abstract)
+                    else: 
+                        print(file + ' is not a document. Discarded.')
+                except (EOFError, TypeError, UnicodeDecodeError): 
+                    print('Error: ' + file + ' was not correctly formatted. Discarded.')
 
 
 if __name__ == '__main__':
-    """Runs if script called on command line."""
+    """Runs if script called on command line"""
     setup()
 
 
