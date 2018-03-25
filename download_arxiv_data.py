@@ -4,7 +4,7 @@ from TexSoup import TexSoup
 s3resource = None
 
 def setup():
-    """Sets up data download"""
+    """Sets up data download."""
 
     # Tell boto3 we want to use the resource from Amazon S3
     global s3resource
@@ -26,7 +26,6 @@ def setup():
         if key.endswith('.tar'):
             if os.path.exists(key):
                 print(key + ' already has been downloaded and extracted.')
-                continue;
             else:
                 downloadFile(source_bucket, key)
                 extractFile(key)
@@ -38,7 +37,7 @@ def setup():
 
 def copyFileToS3(source_bucket, key):
     """
-    Copies file from source bucket to specified S3 bucket
+    Copies file from source bucket to specified S3 bucket.
 
     Parameters
     ----------
@@ -69,7 +68,7 @@ def copyFileToS3(source_bucket, key):
 
 def downloadFile(source_bucket, key):
     """
-    Downloads file from source bucket to computer
+    Downloads file from source bucket to computer.
 
     Parameters
     ----------
@@ -97,7 +96,7 @@ def downloadFile(source_bucket, key):
 
 def extractFile(filename):
     """
-    Extracts specified file
+    Extracts specified file.
 
     Parameters
     ----------
@@ -134,7 +133,7 @@ def extractFile(filename):
                 print(subfile.name + ' extracted successfully')
                 total_successful = total_successful + 1
             except tarfile.ReadError:
-                # If error extracting subfile, register in error log
+                # If error extracting subfile, note in error log
                 print('error extracting ' + subfile.name + '...')
                 log.write(subfile.name + '\n')
     tar.close()
@@ -147,9 +146,13 @@ def extractFile(filename):
 
 
 def parseFiles():
-    """Parses downloaded document .tex files for word content"""
+    """
+    Parses downloaded document .tex files for word content.
+    We are only interested in the article body, defined by /section tags.
+    """
 
     words = []  # may want to change data structure later
+    corpus = open('corpus.txt', 'a')
 
     for file in os.listdir("latex"):
         if file.endswith('.tex'):
@@ -157,12 +160,28 @@ def parseFiles():
             with open("latex/" + file) as f:
                 try:
                     soup = TexSoup(f)
-                    # If .tex is document (defined as having /begin{document},
-                    # which is accessible by soup.document),
-                    # parse its sections for words, maintaining word order
+                    # Parse article body if .tex is a document, defined by /begin{document}
+                    # Any errors in LaTeX formatting will result in file discard
+                    
                     if soup.document:
                         print(file + ' is a document, now parsing...')
-                        print(soup.abstract)
+                        # If a \section or \subsection tag
+                        lastChildIsSection = False
+                        for child in soup.document.contents:
+                            # If last child was \section or \subsection and current child is text,
+                            if lastChildIsSection and isinstance(child, str):
+                                # Get text
+                                print(child)
+
+                            # Check if \section or \subsection
+                            if type(child).__name__ == 'TexNode' and (child.name == 'section' or child.name == 'subsection'):
+                                lastChildIsSection = True
+                            else:
+                                lastChildIsSection = False
+
+                        # Append body text to corpus
+                        # Note: Also add details about article for future identification 
+                        # corpus.write('\n' + body)
                     else: 
                         print(file + ' is not a document. Discarded.')
                 except (EOFError, TypeError, UnicodeDecodeError): 
