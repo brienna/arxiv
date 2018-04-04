@@ -1,5 +1,5 @@
 import boto3, tarfile, os, shutil, datetime, sys
-from TexSoup import TexSoup
+from tex2py import tex2py
 
 s3resource = None
 
@@ -151,41 +151,45 @@ def parseFiles():
     We are only interested in the article body, defined by /section tags.
     """
 
-    words = []  # may want to change data structure later
-    corpus = open('corpus.txt', 'a')
-
     for file in os.listdir("latex"):
         if file.endswith('.tex'):
             print('\nChecking ' + file + '...')
             with open("latex/" + file) as f:
                 try:
-                    soup = TexSoup(f)
-                    # Parse article body if .tex is a document, defined by /begin{document}
-                    # Any errors in LaTeX formatting will result in file discard
-                    
-                    if soup.document:
-                        print(file + ' is a document, now parsing...')
-                        # If a \section or \subsection tag
-                        lastChildIsSection = False
-                        for child in soup.document.contents:
-                            # If last child was \section or \subsection and current child is text,
-                            if lastChildIsSection and isinstance(child, str):
-                                # Get text
-                                print(child)
-
-                            # Check if \section or \subsection
-                            if type(child).__name__ == 'TexNode' and (child.name == 'section' or child.name == 'subsection'):
-                                lastChildIsSection = True
-                            else:
-                                lastChildIsSection = False
-
-                        # Append body text to corpus
-                        # Note: Also add details about article for future identification 
-                        # corpus.write('\n' + body)
-                    else: 
+                    toc = tex2py(f)  # toc = tree of contents
+                    # If file is a document, defined as having \begin{document}
+                    if toc.source.document:
+                        # Iterate over the document's sections
+                        for section in toc:
+                            print('1st loop, TAGGED NAME IS... ' + section.source.name)
+                            getText(section)
+                    else:
                         print(file + ' is not a document. Discarded.')
                 except (EOFError, TypeError, UnicodeDecodeError): 
                     print('Error: ' + file + ' was not correctly formatted. Discarded.')
+
+
+def getText(node):
+    corpus = open('corpus.txt', 'a')
+    # Iterate over each element in the node
+    for x in node:
+        # If x isn't text or syntax macro,
+        # then it has an accessible name attribute which we can use to identify subsections)
+        if not isinstance(x.source, str) and not type(x.source).__name__ in ('RArg', 'OArg'):
+            print('2nd loop, TAGGED NAME IS...' + x.source.name)
+            # If x is a subsection, call getText again to traverse its elements
+            if x.source.name == 'subsection':
+                getText(x)
+            # If x is 'acknowledgements', quit
+            if x.source.name == 'acknowledgements':
+                return
+        # If x is text, append to corpus
+        if isinstance(x.source, str):
+            corpus.write(x.source)
+            print(x)
+            print("Appended to corpus")
+        print("")
+
 
 
 if __name__ == '__main__':
