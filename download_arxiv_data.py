@@ -168,16 +168,17 @@ def parseFiles():
 
     for file in os.listdir("xml"):
         if file.endswith('.xml'):
-            print('\nChecking ' + file + '...')
+            print('\nParsing ' + file + '...')
             with open("xml/" + file) as f:
                 soup = BeautifulSoup(f, "xml")
                 sections = soup.find_all('section')
+                print('sections: ' + str(len(sections)))
                 for section in sections:
                     # Process citations
                     citations = section.find_all('cite')
                     for citation in citations:
                         # Render inline citations
-                        if citation['class'] == 'ltx_citemacro_citet':
+                        if citation.has_attr('class') and citation['class'] == 'ltx_citemacro_citet':
                             # Get ref #
                             citet = citation.bibref['bibrefs']
                             # Using ref #, find inline citation in bibliography
@@ -187,10 +188,19 @@ def parseFiles():
                         # Otherwise remove citation
                         else: 
                             citation.decompose()
-                    # Remove footnotes
+                    # Remove footnotes, tables, figures (although converting to XML should not include them), and captions
                     footnotes = section.find_all('note')
                     for footnote in footnotes:
                         footnote.decompose()
+                    tables = section.find_all('tabular')
+                    for table in tables:
+                        table.decompose()
+                    captions = section.find_all('caption')
+                    for caption in captions:
+                        caption.decompose()
+                    figures = section.find_all('figure')
+                    for figure in figures:
+                        figure.decompose()
                     # Append document to corpus
                     corpus.write(section.get_text())
 
