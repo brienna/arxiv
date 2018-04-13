@@ -1,6 +1,7 @@
 import boto3, tarfile, os, shutil, datetime, sys
 from bs4 import BeautifulSoup
 from bs4 import NavigableString
+import subprocess
 
 s3resource = None
 
@@ -31,8 +32,8 @@ def setup():
                 downloadFile(source_bucket, key)
                 extractFile(key)
 
+    #convertFiles()
     parseFiles()
-    
     # copyFileToS3(source_bucket, key)
 
 
@@ -146,56 +147,52 @@ def extractFile(filename):
     print('Total number of astro-ph .gz files successfully extracted: ' + str(total_successful))
 
 
+def convertFiles():
+    """
+    Converts downloaded .tex files to .xml. 
+    Requires latexml package: $ brew install latexml
+    """
+
+    for file in os.listdir("latex"):
+        filename, file_extension = os.path.splitext(file)
+        if file_extension == ".tex":
+            print(subprocess.run(["latexml", "--dest=xml/" + filename + ".xml", "latex/" + file]))
+
+
 def parseFiles():
     """
-    Parses downloaded document .tex files for word content.
-    We are only interested in the article body, defined by /section tags.
+    Parses converted .xml files for word content.
     """
+
+    corpus = open('corpus.txt', 'a')
 
     for file in os.listdir("xml"):
         if file.endswith('.xml'):
             print('\nChecking ' + file + '...')
             with open("xml/" + file) as f:
                 soup = BeautifulSoup(f, "xml")
-                getText(soup)
-
-
-def getText(soup):
-    """
-    Extracts text from given "section" node and any nested "subsection" nodes. 
-
-    Parameters
-    ----------
-    node : list
-        A "section" node in a .tex document 
-    """
-
-    corpus = open('corpus.txt', 'a')
-
-    # Process sections
-    sections = soup.find_all('section')
-    for section in sections:
-        print(section.name)
-        # Process citations
-        citations = section.find_all('cite')
-        for citation in citations:
-            # Render inline citations
-            if citation['class'] == 'ltx_citemacro_citet':
-                # Get ref #
-                citet = citation.bibref['bibrefs']
-                # Using ref #, find inline citation in bibliography
-                citetStr = soup.find('bibitem', attrs={'key': citet}).find('bibtag', attrs={'role': 'refnum'}).string
-                # Replace citation tag with in-text citation str
-                citation.replace_with(NavigableString(citetStr))
-            # Otherwise remove citation
-            else: 
-                citation.decompose()
-        # Remove footnotes
-        footnotes = section.find_all('note')
-        for footnote in footnotes:
-            footnote.decompose()
-        # Append document to corpus
-        corpus.write(section.get_text())
+                sections = soup.find_all('section')
+                for section in sections:
+                    # Process citations
+                    citations = section.find_all('cite')
+                    for citation in citations:
+                        # Render inline citations
+                        if citation['class'] == 'ltx_citemacro_citet':
+                            # Get ref #
+                            citet = citation.bibref['bibrefs']
+                            # Using ref #, find inline citation in bibliography
+                            citetStr = soup.find('bibitem', attrs={'key': citet}).find('bibtag', attrs={'role': 'refnum'}).string
+                            # Replace citation tag with in-text citation str
+                            citation.replace_with(NavigableString(citetStr))
+                        # Otherwise remove citation
+                        else: 
+                            citation.decompose()
+                    # Remove footnotes
+                    footnotes = section.find_all('note')
+                    for footnote in footnotes:
+                        footnote.decompose()
+                    # Append document to corpus
+                    corpus.write(section.get_text())
 
 
 if __name__ == '__main__':
