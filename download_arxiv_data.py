@@ -1,5 +1,6 @@
 import boto3, tarfile, os, shutil, datetime, sys
-from tex2py import tex2py
+from bs4 import BeautifulSoup
+from bs4 import NavigableString
 
 s3resource = None
 
@@ -151,45 +152,50 @@ def parseFiles():
     We are only interested in the article body, defined by /section tags.
     """
 
-    for file in os.listdir("latex"):
-        if file.endswith('.tex'):
+    for file in os.listdir("xml"):
+        if file.endswith('.xml'):
             print('\nChecking ' + file + '...')
-            with open("latex/" + file) as f:
-                try:
-                    toc = tex2py(f)  # toc = tree of contents
-                    # If file is a document, defined as having \begin{document}
-                    if toc.source.document:
-                        # Iterate over the document's sections
-                        for section in toc:
-                            print('1st loop, TAGGED NAME IS... ' + section.source.name)
-                            getText(section)
-                    else:
-                        print(file + ' is not a document. Discarded.')
-                except (EOFError, TypeError, UnicodeDecodeError): 
-                    print('Error: ' + file + ' was not correctly formatted. Discarded.')
+            with open("xml/" + file) as f:
+                soup = BeautifulSoup(f, "xml")
+                getText(soup)
 
 
-def getText(node):
+def getText(soup):
+    """
+    Extracts text from given "section" node and any nested "subsection" nodes. 
+
+    Parameters
+    ----------
+    node : list
+        A "section" node in a .tex document 
+    """
+
     corpus = open('corpus.txt', 'a')
-    # Iterate over each element in the node
-    for x in node:
-        # If x isn't text or syntax macro,
-        # then it has an accessible name attribute which we can use to identify subsections)
-        if not isinstance(x.source, str) and not type(x.source).__name__ in ('RArg', 'OArg'):
-            print('2nd loop, TAGGED NAME IS...' + x.source.name)
-            # If x is a subsection, call getText again to traverse its elements
-            if x.source.name == 'subsection':
-                getText(x)
-            # If x is 'acknowledgements', quit
-            if x.source.name == 'acknowledgements':
-                return
-        # If x is text, append to corpus
-        if isinstance(x.source, str):
-            corpus.write(x.source)
-            print(x)
-            print("Appended to corpus")
-        print("")
 
+    # Process sections
+    sections = soup.find_all('section')
+    for section in sections:
+        print(section.name)
+        # Process citations
+        citations = section.find_all('cite')
+        for citation in citations:
+            # Render inline citations
+            if citation['class'] == 'ltx_citemacro_citet':
+                # Get ref #
+                citet = citation.bibref['bibrefs']
+                # Using ref #, find inline citation in bibliography
+                citetStr = soup.find('bibitem', attrs={'key': citet}).find('bibtag', attrs={'role': 'refnum'}).string
+                # Replace citation tag with in-text citation str
+                citation.replace_with(NavigableString(citetStr))
+            # Otherwise remove citation
+            else: 
+                citation.decompose()
+        # Remove footnotes
+        footnotes = section.find_all('note')
+        for footnote in footnotes:
+            footnote.decompose()
+        # Append document to corpus
+        corpus.write(section.get_text())
 
 
 if __name__ == '__main__':
