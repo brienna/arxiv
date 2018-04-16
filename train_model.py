@@ -22,6 +22,7 @@ def visualize_closest_words(model, word):
     for word_score in close_words:
         word_vector = model[word_score[0]]
         word_labels.append(word_score[0])
+        print(word_score)
         arr = numpy.append(arr, numpy.array([word_vector]), axis=0)
 
     # Generate t-sne coordinates for 2 dimensions
@@ -30,12 +31,12 @@ def visualize_closest_words(model, word):
     Y = tsne.fit_transform(arr)
 
     x_coords = Y[:,0]
-    y_coords = Y[:,0]
+    y_coords = Y[:,1]
 
-    # Display scatter plot 
+    # Display scatter plot
     plt.scatter(x_coords, y_coords)
     for label, x, y in zip(word_labels, x_coords, y_coords):
-        plt.annotate(label, xy=(x,y), xytext=(0, 0), textcoords='offset points')
+        plt.annotate(label, xy=(x, y), xytext=(0, 0), textcoords='offset points')
     plt.xlim(x_coords.min()+0.00005, x_coords.max()+0.00005)
     plt.ylim(y_coords.min()+0.00005, y_coords.max()+0.00005)
     plt.show()
@@ -65,7 +66,9 @@ if __name__ == '__main__':
     # Get the words closest to a word
     #print(model.similar_by_word('variable'))
 
-    visualize_closest_words(model, 'galaxy')
+
+
+    visualize_closest_words(model, 'milky')
 
 
 
