@@ -3,7 +3,7 @@ from sklearn.manifold import TSNE
 import matplotlib.pyplot as plt
 
 def main():
-    with open('titles.txt', 'r') as f:
+    with open('corpus.txt', 'r') as f:
         # do some pre-processing and return list of words for each title
         for i, line in enumerate(f):
             yield gensim.utils.simple_preprocess(line)
@@ -68,7 +68,7 @@ if __name__ == '__main__':
 
 
 
-    visualize_closest_words(model, 'milky')
+    visualize_closest_words(model, 'cluster')
 
 
 

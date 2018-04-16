@@ -1,4 +1,4 @@
-import subprocess, os
+import subprocess, os, json, re
 from bs4 import BeautifulSoup, NavigableString
 
 def convert_tex_to_xml():
@@ -19,6 +19,7 @@ def parse():
     Parses converted .xml files for word content.
     """
 
+    stopwords = json.load(open('stopwords.json', 'r'))
     corpus = open('corpus.txt', 'w')
     num = 0
 
@@ -38,12 +39,16 @@ def parse():
                         math = desired.find('Math')
                         if math:
                             math.decompose()
-                        sentence = desired.get_text().replace('\n', ' ')
+                        # Get text, remove newlines caused by nested TeX elements, and lowercase
+                        text = desired.get_text().replace('\n', ' ').lower()
+                        text.lower()
+                        # Remove stopwords
+                        cleaned_text = ' '.join([word for word in text.split() if word not in stopwords])
                         # For titles only
                         #if not desired.endswith('.'):
                         #    sentence = sentence + '.'
-                        corpus.write('\n\n' + sentence)
-                        print(sentence)
+                        corpus.write('\n\n' + cleaned_text)
+                        print(cleaned_text)
                         num += 1
                     ######
                     # sections = soup.find_all('section')
@@ -94,10 +99,12 @@ def parse():
                         # Append document to corpus (EDIT TO EXCLUDE TITLES)
                     #    corpus.write(section.get_text())
     print('\n\nDocuments: ' + str(num))
+    corpus.close()
+    stopwords.close()
 
 if __name__ == '__main__':
     # Convert the downloaded tex files to xml, to help with parsing
-    convert_tex_to_xml()
+    # convert_tex_to_xml()
     # Parse titles
     parse()
 
