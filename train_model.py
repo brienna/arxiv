@@ -1,7 +1,5 @@
-import gensim, os, numpy
-import pandas as pd
+import gensim, os, numpy, mpld3, pandas as pd, matplotlib.pyplot as plt
 from sklearn.manifold import TSNE
-import matplotlib.pyplot as plt
 
 def main():
     with open('corpus.txt', 'r') as f:
@@ -46,11 +44,11 @@ def visualize_closest_words(model, word):
 
 def visualize_model(model):
     # https://stackoverflow.com/questions/43776572/visualise-word2vec-generated-from-gensim?noredirect=1&lq=1
-    vocab = list(model.wv.vocab)
-    print(vocab)
+    vocab = model.wv.vocab
     X = model[vocab]
     tsne = TSNE(n_components=2)
     X_tsne = tsne.fit_transform(X)
+    print(X_tsne)
 
     df = pd.DataFrame(X_tsne, index=vocab, columns=['x', 'y'])
 
@@ -62,25 +60,80 @@ def visualize_model(model):
         ax.annotate(word, pos)
 
     plt.show()
+    #mpld3.show()
 
-if __name__ == '__main__':
-    """Runs if script called on command line"""
+def detect_phrases():
+    # https://radimrehurek.com/gensim/models/phrases.html
+    modelfile = 'phrases_model.bin'
+    if os.path.exists(modelfile):
+        print('loading saved model')
+        model = gensim.models.Word2Vec.load(modelfile)
+        #print(model.wv.vocab)
+        visualize_model(model) # TAKES FOREVER
+    else:
+        with open('corpus.txt', 'r') as abstracts:
+            sentence_stream = [a.split(" ") for a in abstracts]
+            # print(sentence_stream)
+            ngrams = get_ngrams(sentence_stream)
+            #sent = ['milky', 'way', 'galaxy', 'is', 'large'] # need to add u prefix to each word?
+            #print(bigrams[sent])
+            model = gensim.models.Word2Vec(ngrams, window=10, min_count=5, size=100)
+            model.train(ngrams, total_examples=len(ngrams), epochs=10)
+            model.wv.save_word2vec_format(modelfile, binary=True)
+            visualize_model(model) # TAKES FOREVER
+
+def get_ngrams(sentences):
+    """
+    Detects n-grams with n up to 4, and replaces those in the titles.
+    https://github.com/everthemore/physics2vec/blob/master/helper.py
+    """
+
+    # Train a 2-word (bigram) phrase-detector
+    bigrams = gensim.models.phrases.Phrases(sentences)
+
+    # And construct a phraser from that (an object that will take a sentence)
+    # and replace it in the bigrams that it knows by single objects)
+    bigram = gensim.models.phrases.Phraser(bigrams)
+
+    # Repeat that for trigrams; the input now are the bigrammed-titles
+    trigrams = gensim.models.phrases.Phrases(bigram[sentences])
+    test = ["dust", "formation", "happens", "in", "space", "and", "rapidly", "rotating", "radio", "sources", "exist"]
+    print('testing: ')
+    print(trigrams[test])
+    trigram = gensim.models.phrases.Phraser(trigrams)
+
+    # Analyze
+    # The phrases.export_phrases(x) function returns pairs of phrases and their
+    # certainty scores from x.
+    bigram_info = {}
+    for b, score in bigrams.export_phrases(sentences):
+        bigram_info[b] = [score, bigram_info.get(b, [0, 0])[1] + 1]
+
+    trigram_info = {}
+    for b, score in trigrams.export_phrases(bigram[sentences]):
+        trigram_info[b] = [score, trigram_info.get(b, [0, 0])[1] + 1]
+
+    # Return a list of n-grammed titles
+    return [trigram[t] for t in sentences]
+
+def train_word_model():
     documents = main()
     documents = list(documents)
 
     # build vocabulary and train model
     model = gensim.models.Word2Vec(
         documents,
-        size=300,
-        window=20,
-        min_count=3,
+        size=300, # Size of encoding vectors
+        window=5, # Size of window scanning over text. A typical window size might be 5, meaning 5 words behind and 5 words ahead (10 in total).
+        min_count=5, # Minimum number of times a word has to appear to participate
         workers=10) # have downloaded cython, is it working?
     model.train(documents, total_examples=len(documents), epochs=10)
 
     #model.wv.save_word2vec_format('model.bin', binary=True)
     #loaded_model = gensim.models.KeyedVectors.load_word2vec_format('model.bin', binary=True) 
-    
 
+    #start_time = 
+    print(model)
     w1 = "gravity"
     #print(model.wv.most_similar(positive=w1))
 
@@ -88,13 +141,20 @@ if __name__ == '__main__':
     #print(model['variable'])
 
     # Get the words closest to a word
-    print(len(model['variable']))
     #print(model.similar_by_word('variable'))
 
     #print(model.most_similar('variable'))
 
     #visualize_closest_words(model, 'variable')
+    #detect_phrases()
     visualize_model(model)
+
+if __name__ == '__main__':
+    """Runs if script called on command line"""
+    #train_word_model()
+
+    detect_phrases()
+    #train_word_model()
 
 
 
