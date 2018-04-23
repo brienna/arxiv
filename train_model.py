@@ -14,7 +14,8 @@ def visualize_closest_words(model, word):
     word_labels = [word]
 
     # Get close words
-    close_words = model.similar_by_word(word)
+    #close_words = model.similar_by_word(word)
+    close_words = model.most_similar(positive=word)
 
     # Save to array the vector for each close word 
     arr = numpy.append(arr, numpy.array([model[word]]), axis=0)
@@ -27,7 +28,6 @@ def visualize_closest_words(model, word):
     # Generate t-sne coordinates for 2 dimensions
     tsne = TSNE(n_components=2, random_state=0)
     numpy.set_printoptions(suppress=True)
-    print(arr)
     Y = tsne.fit_transform(arr)
     print(Y)
 
@@ -46,10 +46,16 @@ def visualize_model(model):
     # https://stackoverflow.com/questions/43776572/visualise-word2vec-generated-from-gensim?noredirect=1&lq=1
     vocab = model.wv.vocab
     X = model[vocab]
+
+    print('Number of unique words: ' + str(len(X)))
+    print('High-dimensional vector space:')
+    print(X)
+
     tsne = TSNE(n_components=2)
     X_tsne = tsne.fit_transform(X)
+    print('2D vector space:')
     print(X_tsne)
-
+    
     df = pd.DataFrame(X_tsne, index=vocab, columns=['x', 'y'])
 
     fig = plt.figure()
@@ -71,6 +77,7 @@ def detect_phrases():
         #print(model.wv.vocab)
         visualize_model(model) # TAKES FOREVER
     else:
+        print('building model...')
         with open('corpus.txt', 'r') as abstracts:
             sentence_stream = [a.split(" ") for a in abstracts]
             # print(sentence_stream)
@@ -120,25 +127,38 @@ def train_word_model():
     documents = main()
     documents = list(documents)
 
-    # build vocabulary and train model
-    model = gensim.models.Word2Vec(
-        documents,
-        size=300, # Size of encoding vectors
-        window=5, # Size of window scanning over text. A typical window size might be 5, meaning 5 words behind and 5 words ahead (10 in total).
-        min_count=5, # Minimum number of times a word has to appear to participate
-        workers=10) # have downloaded cython, is it working?
-    model.train(documents, total_examples=len(documents), epochs=10)
+    modelfile = 'model.bin'
+    if os.path.exists(modelfile):
+        model = gensim.models.KeyedVectors.load_word2vec_format(modelfile, binary=True) 
 
-    #model.wv.save_word2vec_format('model.bin', binary=True)
-    #loaded_model = gensim.models.KeyedVectors.load_word2vec_format('model.bin', binary=True) 
+        # visualize closest words
+        #visualize_closest_words(model, 'sound')
+        visualize_model(model)
 
-    #start_time = 
-    print(model)
-    w1 = "gravity"
-    #print(model.wv.most_similar(positive=w1))
+    else:
+        # build vocabulary and train model
+        model = gensim.models.Word2Vec(
+            documents,
+            size=300, # Size of encoding vectors
+            window=5, # Size of window scanning over text. A typical window size might be 5, meaning 5 words behind and 5 words ahead (10 in total).
+            min_count=5, # Minimum number of times a word has to appear to participate
+            workers=10) # have downloaded cython, is it working?
+        model.train(documents, total_examples=len(documents), epochs=10)
 
-    # Get raw vector for a word
-    #print(model['variable'])
+        model.wv.save_word2vec_format(modelfile, binary=True)
+
+        # See high dimensional 
+        print(model)
+        # Get raw vector for a word
+        print('Vector for "star": ')
+        print(model['star'])
+
+        #visualize_model(model)
+
+        visualize_closest_words(model, 'planet')
+
+
+    #print(model.wv.most_similar(positive='variable'))
 
     # Get the words closest to a word
     #print(model.similar_by_word('variable'))
@@ -147,12 +167,10 @@ def train_word_model():
 
     #visualize_closest_words(model, 'variable')
     #detect_phrases()
-    visualize_model(model)
+    #visualize_model(model)
 
 if __name__ == '__main__':
     """Runs if script called on command line"""
-    #train_word_model()
-
     detect_phrases()
     #train_word_model()
 
