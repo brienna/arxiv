@@ -171,8 +171,8 @@ def train_word_model():
 
 if __name__ == '__main__':
     """Runs if script called on command line"""
-    detect_phrases()
-    #train_word_model()
+    #detect_phrases()
+    train_word_model()
 
 
 

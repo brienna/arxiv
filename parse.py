@@ -26,7 +26,7 @@ def parse():
     num_of_fulltexts = 0
 
     # Open corpora for writing
-    abstracts_corpus = open('abstracts_corpus.txt', 'w')
+    #abstracts_corpus = open('abstracts_corpus.txt', 'w')
     fulltexts_corpus = open('fulltexts_corpus.txt', 'w')
 
     # For each xml file
@@ -40,26 +40,28 @@ def parse():
                 # If .xml file represents an actual article (specified by \document tag)
                 if document:
                     # Get abstract from document
-                    abstract = getAbstract(document)
+                    #abstract = getAbstract(document)
                     # Add abstract to corpus 
-                    if abstract is not None:
-                        print('Adding abstract from ' + file)
-                        abstracts_corpus.write('\n\n' + abstract)
-                        num_of_abstracts += 1
+                    #if abstract is not None:
+                    #    print('Adding abstract from ' + file)
+                    #    abstracts_corpus.write('\n\n' + abstract)
+                    #    num_of_abstracts += 1
 
                     # Get fulltext from file
-                    # fulltext = getFullText(soup)
-                    # # Add fulltext to corpus
-                    # if fulltext is not None:
-                    #     print('Adding fulltext from ' + file)
-                    #     fulltexts_corpus.write(fulltext)
-                    #     num_of_fulltexts += 1
+                    fulltext = getFullText(soup)
+                    # Add fulltext to corpus
+                    if fulltext is not None:
+                        print('Adding fulltext from ' + file)
+                        converted_file = open(os.path.join('txt/', os.path.splitext(file)[0] + '.txt'), 'w+')
+                        converted_file.write(fulltext)
+                        # fulltexts_corpus.write(fulltext)
+                        num_of_fulltexts += 1
 
-    print('\n\nAbstracts: ' + str(num_of_abstracts))
+    #print('\n\nAbstracts: ' + str(num_of_abstracts))
     print('\n\nFull texts: ' + str(num_of_fulltexts))
     
     abstracts_corpus.close()
-    fulltexts_corpus.close()
+    # fulltexts_corpus.close()
 
 
 def getFullText(soup):
@@ -73,19 +75,22 @@ def getFullText(soup):
     print('sections: ' + str(len(sections)))
 
     for section in sections:
-        # Process citations
-        citations = section.find_all('cite')
+        # Process citations that have a class only
+        citations = section.find_all('cite', {'class': True})
         for citation in citations:
             # Render inline citations by fetching author info from bibliography
-            if citation.has_attr('class') and citation['class'] == 'ltx_citemacro_citet':
+            if citation.name != None and citation['class'] == 'ltx_citemacro_citet': # Note: first condition catches a <None> tag in 0076.xml although I couldn't find the tag itself in the file...
                 # Get bibliography reference
                 citet = citation.bibref['bibrefs']
                 # Using reference, get authors from bibliography
                 bib_item = soup.find('bibitem', attrs={'key': citet})
                 if bib_item: 
-                    authors = bib_item.find('bibtag', attrs={'role': 'refnum'}).string
-                    # Replace citation tag with in-text citation str
-                    citation.replace_with(NavigableString(authors))
+                    authors = bib_item.find('bibtag', attrs={'role': 'authors'})
+                    if authors != None and authors.text != None:
+                        # Replace citation tag with in-text citation str
+                        citation.replace_with(authors.text)
+                    else:
+                        print('Authors not found')
                 else: 
                     print('Citation missed: ' + citet) # account for array of citations in aldering.xml
             # If not inline citation, remove citation for now
