@@ -1,4 +1,3 @@
-import boto3, configparser
 import boto3, configparser, os, botocore
 from bs4 import BeautifulSoup
 import json
