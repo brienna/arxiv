@@ -5,13 +5,14 @@ import tarfile, gzip, shutil, os, glob, re, pathlib, subprocess as sp
 def extract(filepath, identifiers):
 	'''
 	Extracts astro-ph submissions from given tar filepath.
+	Logs which submissions belong to particular tarfile.
 	'''
 
 	# Quit file extraction if given file is not tarfile
 	if not tarfile.is_tarfile(filepath):
 		print('can\'t unzip {}, not a .tar file'.format(filepath))
 
-	total_tex = 0
+	total_submissions = 0
 	tar_dir = 'latex/' + os.path.splitext(os.path.basename(filepath))[0] + '/'
 
 	# Create .tar directory if it doesn't exist
@@ -19,39 +20,92 @@ def extract(filepath, identifiers):
 		os.makedirs(tar_dir)
 		
 	# Open tarfile, read-only
-	print('Opening {}'.format(filepath))
+	print('Extracting {}'.format(filepath))
 	tar = tarfile.open(filepath)
-	# Iterate over submissions, extracting only those that belong to the astro-ph category
-	for submission in tar.getmembers():
-		# Create submission directory if it doesn't exist
-		submission_id = os.path.splitext(os.path.basename(submission.name))[0]
-		submission_path = tar_dir + '/' + submission_id
-		if submission.name.endswith('.gz') and identifiers.str.contains(submission_id).any():
-			if not os.path.isdir(submission_path):
-				os.makedirs(submission_path)
-			#### Extract here.........
-			try:
-				gz_obj = tar.extractfile(submission) 
-				gz = tarfile.open(fileobj=gz_obj) 
-				gz.extractall(path=submission_path)
-				total_tex += 1
-			except tarfile.ReadError:
-				# Extract the entire .gz because we cannot read it using tarfile 
-				# Note that these .gzs are single .tex files with no extension specified
-				tar.extract(submission, path='temp')
-				# Uncompress the .gz file using gzip instead and place it with the other .tex files
-				with gzip.open('temp/' + submission.name, 'rb') as f_in:
-					basename = os.path.splitext(os.path.basename(submission.name))[0]
-					with open(tar_dir + submission_id + '/' + basename + '.tex', 'wb+') as f_out:
-						shutil.copyfileobj(f_in, f_out)
-						total_tex += 1
+	# Iterate over submissions, extracting only those that belong to the astro-ph category, 
+	# logging which submissions belong to which tarfile
+	if not os.path.isdir('logs'):
+		os.makedirs('logs')
+	with open('logs/tarfile_submission_log.txt', 'a+') as logfile:
+		logfile.write('\n\nTARFILE: {}'.format(os.path.basename(filepath)))
+		for submission in tar.getmembers():
+			# Create submission directory if it doesn't exist
+			submission_id = os.path.splitext(os.path.basename(submission.name))[0]
+			submission_path = tar_dir + '/' + submission_id
+			if submission.name.endswith('.gz') and identifiers.str.contains(submission_id).any():
+				logfile.write('\n' + submission_id)
+				if not os.path.isdir(submission_path):
+					os.makedirs(submission_path)
+				#### Extract here.........
+				try:
+					gz_obj = tar.extractfile(submission) 
+					gz = tarfile.open(fileobj=gz_obj) 
+					gz.extractall(path=submission_path)
+					total_submissions += 1
+				except tarfile.ReadError:
+					# Extract the entire .gz because we cannot read it using tarfile 
+					# Note that these .gzs are single .tex files with no extension specified
+					tar.extract(submission, path='temp')
+					# Uncompress the .gz file using gzip instead and place it with the other .tex files
+					with gzip.open('temp/' + submission.name, 'rb') as f_in:
+						basename = os.path.splitext(os.path.basename(submission.name))[0]
+						with open(tar_dir + submission_id + '/' + basename + '.tex', 'wb+') as f_out:
+							shutil.copyfileobj(f_in, f_out)
+							total_submissions += 1
 	tar.close()
-
+	# Delete the temporary folder for those wonky gz files
+	shutil.rmtree('temp/', ignore_errors=True)
 	print(filepath + ' extraction complete')
-	print('Number of .tex files obtained: ' + str(total_tex) + '\n')
+	print('Number of submissions obtained: ' + str(total_submissions))
 
 
-def get_all_preprints_from_tarfile(base_path):
+def get_outpath(tex_path):
+	'''
+	Returns the filepath for a XML file,
+	based on the given TEX filepath. 
+	'''
+	
+	path_parts = pathlib.Path(tex_path).parts
+	arxiv_id = path_parts[2]
+	outpath = 'xml/' + arxiv_id + '.xml'
+	return outpath
+
+
+def get_preprint(submission_path, texs):
+	'''
+	Identifies the preprint within a given submission. 
+	
+	Parameters
+	----------
+	submission_path : str
+		Filepath to submission directory
+	texs : list of str
+		Filepaths to all TEX files within submission directory
+	'''
+	preprint = None
+	
+	# If submission contains only one file, this is the preprint
+	if len(texs) == 1:
+		preprint = texs[0]
+	# If submission contains ms.tex or main.tex, this is the preprint
+	elif 'ms.tex' in texs:
+		preprint = submission_path + '/' + 'ms.tex'
+	elif 'main.tex' in texs:
+		preprint = submission_path + '/' + 'main.tex'
+	# Otherwise, iterate through each .tex looking for \documentclass or \documentstyle
+	else: 
+		for tex_path in texs: 
+			with open(tex_path, 'rb') as f: 
+				data = f.readlines()
+				r = re.compile(b'(.*\\\\documentclass.*)|(.*\\\\documentstyle.*)')
+				if len(list(filter(r.match, data))) > 0:
+					preprint = tex_path
+					break 
+	
+	return preprint
+
+
+def get_all_preprints(base_path):
 	'''Collects filepaths for all preprints within
 	given folder. Returns an array of strings, each
 	string representing the path of a preprint.
@@ -98,91 +152,58 @@ def get_all_preprints_from_tarfile(base_path):
 	print('Empty submissions: ' + str(len(empty_submissions)))
 	print('Potentially corrupt submissions: ' + str(len(corrupt_submissions)))
 
+	if not os.path.isdir('logs'):
+		os.makedirs('logs')
+	with open('logs/corrupt_submissions_log.txt', 'a+') as corrupt_logfile:
+		for submission in corrupt_submissions:
+			corrupt_logfile.write(submission + '\n')
+	with open('logs/empty_submissions_log.txt', 'a+') as empty_logfile:
+		for submission in empty_submissions:
+			empty_logfile.write(submission + '\n')
+
 	return preprints
 
 
-def get_outpath(tex_path):
-	'''
-	Returns the filepath for a XML file,
-	based on the given TEX filepath. 
-	'''
-	
-	path_parts = pathlib.Path(tex_path).parts
-	arxiv_id = path_parts[2]
-	outpath = 'xml/' + arxiv_id + '.xml'
-	return outpath
-
-
-def get_preprints_to_convert(key):
+def get_preprints_to_convert(base_path):
 	'''
 	Returns a list of strings. Each string 
 	is a path to a TEX file within given folder
 	that has not yet been converted to XML.
 	'''
 	
-	preprints = get_all_preprints_from_tarfile(key)
+	preprints = get_all_preprints(base_path)
 	preprints_to_convert = []
 	
 	for tex_path in preprints:
 		outpath = get_outpath(tex_path)
 		logfile_path = 'logs/' + os.path.splitext(os.path.basename(tex_path))[0] + '.txt'
-		if not os.path.isfile(outpath):
-		#and not os.path.isfile(logfile_path):
+		if not os.path.isfile(outpath) and not os.path.isfile(logfile_path):
 			preprints_to_convert.append(tex_path)
 	
 	print('{} preprints already converted, {} preprints still to be converted...'.format(len(preprints) - len(preprints_to_convert), len(preprints_to_convert)))	
 	return preprints_to_convert
 
 
-def get_preprint(submission_path, texs):
-	'''
-	Identifies the preprint within a given submission. 
-	
-	Parameters
-	----------
-	submission_path : str
-		Filepath to submission directory
-	texs : list of str
-		Filepaths to all TEX files within submission directory
-	'''
-	preprint = None
-	
-	# If submission contains only one file, this is the preprint
-	if len(texs) == 1:
-		preprint = texs[0]
-	# If submission contains ms.tex or main.tex, this is the preprint
-	elif 'ms.tex' in texs:
-		preprint = submission_path + '/' + 'ms.tex'
-	elif 'main.tex' in texs:
-		preprint = submission_path + '/' + 'main.tex'
-	# Otherwise, iterate through each .tex looking for \documentclass or \documentstyle
-	else: 
-		for tex_path in texs: 
-			with open(tex_path, 'rb') as f: 
-				data = f.readlines()
-				r = re.compile(b'(.*\\\\documentclass.*)|(.*\\\\documentstyle.*)')
-				if len(list(filter(r.match, data))) > 0:
-					preprint = tex_path
-					break
-	
-	return preprint
+def convert(base_path):
+	preprints = get_preprints_to_convert(base_path)
+	if not os.path.isdir('logs'):
+		os.makedirs('logs')
 
-def convert(in_file):
-	# Get paths for converted file & logfile
-	out_file = get_outpath(in_file)
-	logfile_path = 'logs/' + os.path.splitext(os.path.basename(out_file))[0] + '.txt'
-	
 	# Try conversion, logging command line output
-	try:
-		print('Converting {}...'.format(in_file))
-		with open(logfile_path, 'w') as logfile:
-			sp.call(['latexml', '--dest=' + out_file, in_file], timeout=240, stderr=logfile)
-		print('Writing logfile for ' + in_file)
-	# If conversion has timed out, stop it (or it will eat up memory)
-	# (this usually happens if latexml hangs recursively, as with 
-	# latex/arXiv_src_1009_002/1009.1724/15727_eger.tex)
-	except sp.TimeoutException:
-		print('---x Conversion failed: {}'.format(in_file))
-		sp.kill()
+	for preprint in preprints:
+		# Get paths for converted file & logfile
+		out_file = get_outpath(preprint)
+		logfile_path = 'logs/' + os.path.splitext(os.path.basename(out_file))[0] + '.txt'
+		try:
+			print('Converting {}...'.format(preprint))
+			with open(logfile_path, 'w') as logfile:
+				sp.call(['latexml', '--dest=' + out_file, preprint], timeout=240, stderr=logfile)
+			print('Writing logfile for ' + preprint)
+		# If conversion has timed out, stop it (or it will eat up memory)
+		# (this usually happens if latexml hangs recursively, as with 
+		# latex/arXiv_src_1009_002/1009.1724/15727_eger.tex)
+		except sp.TimeoutException:
+			print('---x Conversion failed: {}'.format(preprint))
+			sp.kill()
 
 

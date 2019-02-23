@@ -13,28 +13,50 @@ def work(key):
 	Defines the work to be done in each multiprocessing worker.
 	'''
 	
-	# If tarfile is in Google Drive, extract it from there
 	global g
 	global s3
 	global m
 
 	print('{} is working on {}...'.format(mp.current_process(), key))
+	downloaded_filename = ''.join(['latex/', os.path.splitext(os.path.basename(key))[0]])
 	gtar = None
 	for gfile in gdrive_tarfiles:
 		if gfile.metadata['title'] == os.path.basename(key):
 			gtar = gfile
-	if gtar:
+	
+	#if tarfile is on local storage, extract it from here
+	if os.path.isfile(key):
+		utils.extract(key, m.identifiers)
+		if len(os.listdir(downloaded_filename)) > 0:
+			utils.convert(downloaded_filename)
+		else:
+			print('Tarfile contains no astro-ph submissions.')
+		os.remove(key)
+		os.remove(downloaded_filename)
+		print('Completed and removed {}'.format(key))
+	# If tarfile is in Google Drive, extract it from there
+	elif gtar:
 		g.download(gtar, key)
 		utils.extract(key, m.identifiers)
-		utils.convert(downloaded_filename)
+		if len(os.listdir(downloaded_filename)) > 0:
+			utils.convert(downloaded_filename)
+		else:
+			print('Tarfile contains no astro-ph submissions.')
 		os.remove(key)
+		os.remove(downloaded_filename)
+		print('Completed and removed {}'.format(key))
 	# Otherwise, extract it from S3
 	else:
 		s3.download_file(key)
 		utils.extract(key, m.identifiers)
-		utils.convert(downloaded_filename)
+		if len(os.listdir(downloaded_filename)) > 0:
+			utils.convert(downloaded_filename)
+		else:
+			print('Tarfile contains no astro-ph submissions.')
 		g.upload(key)
 		os.remove(key)
+		os.remove(downloaded_filename)
+		print('Completed and removed {}'.format(key))
 
 
 def main():
