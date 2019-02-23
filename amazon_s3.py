@@ -1,4 +1,4 @@
-import configparser, boto3
+import configparser, boto3, botocore
 
 
 class Amazon_S3(object):
@@ -35,6 +35,35 @@ class Amazon_S3(object):
 		)
 
 		return page_iterator
+
+	def download_file(self, key):
+	    """
+	    Downloads given filename from source bucket to destination directory.
+
+	    Parameters
+	    ----------
+	    key : str
+	        Name of file to download
+	    """
+
+	    # Ensure src directory exists 
+	    if not os.path.isdir('src'):
+	        os.makedirs('src')
+	    
+	    print('Downloading s3://arxiv/{}'.format(key))
+	    
+	    # Download file
+	    try:
+	        self.s3resource.meta.client.download_file(
+	            Bucket='arxiv', 
+	            Key=key,  # name of key to download from
+	            Filename=key,  # path to file to download to
+	            ExtraArgs={'RequestPayer':'requester'})
+	    except botocore.exceptions.ClientError as e:
+	        if e.response['Error']['Code'] == "404":
+	            print('ERROR: ' + key + " does not exist in arxiv bucket")
+	            
+	    print('Successfully downloaded s3://arxiv/{} to {}'.format(key, key))
 
 
 	def __init__(self):

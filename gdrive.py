@@ -13,7 +13,7 @@ class Gdrive(object):
 		self.drive = GoogleDrive(g_login)
 
 
-	def download_file(self, file, title):
+	def download(self, file, title):
 	    '''
 	    Downloads given file from Google Drive.
 
@@ -61,6 +61,15 @@ class Gdrive(object):
 	        tars_str.sort()
 	    
 	    return tars
+
+	def upload(self, filepath):
+	    print("Uploading " + filepath + " to Google Drive...")
+	    file = drive.CreateFile({'title': os.path.basename(filepath),
+	                             'parents': [{'id': arxiv_folder_id}], # place it into arxiv folder
+	                             'mimeType': 'application/gzip'})
+	    file.SetContentFile(filepath)
+	    file.Upload()
+	    print(filepath + ' uploaded.')
 
 
 	def __init__(self):
