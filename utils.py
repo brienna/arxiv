@@ -1,6 +1,10 @@
 import tarfile, gzip, shutil, os, glob, re, pathlib, subprocess as sp
 
 
+def confirmDir(dir_name):
+	if not os.path.isdir(dir_name):
+		os.makedirs(dir_name)
+
 
 def extract(filepath, identifiers):
 	'''
@@ -24,8 +28,7 @@ def extract(filepath, identifiers):
 	tar = tarfile.open(filepath)
 	# Iterate over submissions, extracting only those that belong to the astro-ph category, 
 	# logging which submissions belong to which tarfile
-	if not os.path.isdir('logs'):
-		os.makedirs('logs')
+	confirmDir('logs')
 	with open('logs/tarfile_submission_log.txt', 'a+') as logfile:
 		logfile.write('\n\nTARFILE: {}'.format(os.path.basename(filepath)))
 		for submission in tar.getmembers():
@@ -34,9 +37,7 @@ def extract(filepath, identifiers):
 			submission_path = tar_dir + '/' + submission_id
 			if submission.name.endswith('.gz') and identifiers.str.contains(submission_id).any():
 				logfile.write('\n' + submission_id)
-				if not os.path.isdir(submission_path):
-					os.makedirs(submission_path)
-				#### Extract here.........
+				confirmDir(submission_path)
 				try:
 					gz_obj = tar.extractfile(submission) 
 					gz = tarfile.open(fileobj=gz_obj) 
@@ -71,7 +72,7 @@ def get_outpath(tex_path):
 	return outpath
 
 
-def get_preprint(submission_path, texs):
+def get_preprint(submission_path, candidates):
 	'''
 	Identifies the preprint within a given submission. 
 	
@@ -85,21 +86,25 @@ def get_preprint(submission_path, texs):
 	preprint = None
 	
 	# If submission contains only one file, this is the preprint
-	if len(texs) == 1:
-		preprint = texs[0]
+	if len(candidates) == 1:
+		preprint = candidates[0]
 	# If submission contains ms.tex or main.tex, this is the preprint
-	elif 'ms.tex' in texs:
+	elif 'ms.tex' in candidates:
 		preprint = submission_path + '/' + 'ms.tex'
-	elif 'main.tex' in texs:
+	elif 'main.tex' in candidates:
 		preprint = submission_path + '/' + 'main.tex'
-	# Otherwise, iterate through each .tex looking for \documentclass or \documentstyle
+	# Otherwise, iterate through each .tex looking for subcandidates
 	else: 
-		for tex_path in texs: 
-			with open(tex_path, 'rb') as f: 
-				data = f.readlines()
-				r = re.compile(b'(?m)^\\\\document(?:class|style).*')
-				if len(list(filter(r.match, data))) > 0:
-					preprint = tex_path
+		subcandidates = []
+		for candidate in candidates: 
+			with open(candidate, 'rb') as f: 
+				data = f.read()
+				doc_regex = re.compile(b'(?m)^\\\\document(?:class|style).*')
+				# If candidate contains \documentclass or \document style, also check for \input tag
+				# NEED TO ADD THIS PART: IF the subcandidate is an argument of an input tag, remove it as a subcandidate
+				if doc_regex.findall(data):
+					subcandidates.append(candidate)
+					preprint = candidate
 					break 
 	
 	return preprint
@@ -152,8 +157,7 @@ def get_all_preprints(base_path):
 	print('Empty submissions: ' + str(len(empty_submissions)))
 	print('Potentially corrupt submissions: ' + str(len(corrupt_submissions)))
 
-	if not os.path.isdir('logs'):
-		os.makedirs('logs')
+	confirmDir('logs')
 	with open('logs/corrupt_submissions_log.txt', 'a+') as corrupt_logfile:
 		for submission in corrupt_submissions:
 			corrupt_logfile.write(submission + '\n')
@@ -186,14 +190,14 @@ def get_preprints_to_convert(base_path):
 
 def convert(base_path):
 	preprints = get_preprints_to_convert(base_path)
-	if not os.path.isdir('logs'):
-		os.makedirs('logs')
+	confirmDir('logs')
 
 	# Try conversion, logging command line output
 	for preprint in preprints:
 		# Get paths for converted file & logfile
 		out_file = get_outpath(preprint)
-		logfile_path = 'logs/' + os.path.splitext(os.path.basename(out_file))[0] + '.txt'
+		preprint_id = os.path.splitext(os.path.basename(out_file))[0]
+		logfile_path = 'logs/' + preprint_id + '.txt'
 		try:
 			print('Converting {}...'.format(preprint))
 			with open(logfile_path, 'w') as logfile:
@@ -204,6 +208,8 @@ def convert(base_path):
 		# latex/arXiv_src_1009_002/1009.1724/15727_eger.tex)
 		except sp.TimeoutExpired:
 			print('---x Conversion failed: {}'.format(preprint))
+			with open('logs/failed_conversions.txt', 'a+') as failed_conversions_logfile:
+				failed_conversions_logfile.write(preprint_id + '\n')
 			sp.kill()
 
 
