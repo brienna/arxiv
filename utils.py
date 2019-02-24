@@ -97,7 +97,7 @@ def get_preprint(submission_path, texs):
 		for tex_path in texs: 
 			with open(tex_path, 'rb') as f: 
 				data = f.readlines()
-				r = re.compile(b'(.*\\\\documentclass.*)|(.*\\\\documentstyle.*)')
+				r = re.compile(b'(?m)^\\\\document(?:class|style).*')
 				if len(list(filter(r.match, data))) > 0:
 					preprint = tex_path
 					break 
@@ -202,7 +202,7 @@ def convert(base_path):
 		# If conversion has timed out, stop it (or it will eat up memory)
 		# (this usually happens if latexml hangs recursively, as with 
 		# latex/arXiv_src_1009_002/1009.1724/15727_eger.tex)
-		except sp.TimeoutException:
+		except sp.TimeoutExpired:
 			print('---x Conversion failed: {}'.format(preprint))
 			sp.kill()
 

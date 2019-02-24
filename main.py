@@ -1,7 +1,7 @@
 from metadata import Metadata
 from gdrive import Gdrive
 from amazon_s3 import Amazon_S3
-import utils, os, multiprocessing as mp
+import utils, os, multiprocessing as mp, shutil
 
 global g
 global gdrive_tarfiles
@@ -19,6 +19,7 @@ def work(key):
 
 	print('{} is working on {}...'.format(mp.current_process(), key))
 	downloaded_filename = ''.join(['latex/', os.path.splitext(os.path.basename(key))[0]])
+	print('Downloading to {}'.format(downloaded_filename))
 	gtar = None
 	for gfile in gdrive_tarfiles:
 		if gfile.metadata['title'] == os.path.basename(key):
@@ -32,7 +33,8 @@ def work(key):
 		else:
 			print('Tarfile contains no astro-ph submissions.')
 		os.remove(key)
-		os.remove(downloaded_filename)
+		shutil.rmtree(downloaded_filename, ignore_errors=True)
+		os.makedirs(downloaded_filename) # for checking purposes
 		print('Completed and removed {}'.format(key))
 	# If tarfile is in Google Drive, extract it from there
 	elif gtar:
@@ -43,7 +45,8 @@ def work(key):
 		else:
 			print('Tarfile contains no astro-ph submissions.')
 		os.remove(key)
-		os.remove(downloaded_filename)
+		shutil.rmtree(downloaded_filename, ignore_errors=True)
+		os.makedirs(downloaded_filename) # for checking purposes
 		print('Completed and removed {}'.format(key))
 	# Otherwise, extract it from S3
 	else:
@@ -55,7 +58,8 @@ def work(key):
 			print('Tarfile contains no astro-ph submissions.')
 		g.upload(key)
 		os.remove(key)
-		os.remove(downloaded_filename)
+		shutil.rmtree(downloaded_filename, ignore_errors=True)
+		os.makedirs(downloaded_filename) # for checking purposes
 		print('Completed and removed {}'.format(key))
 
 
