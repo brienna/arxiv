@@ -1,4 +1,12 @@
-import tarfile, gzip, shutil, os, glob, re, pathlib, subprocess as sp, glob
+import tarfile
+import gzip
+import shutil
+import os
+import glob
+import re
+import pathlib
+import zipfile
+import subprocess as sp
 
 
 def confirmDir(dir_name):
@@ -18,7 +26,7 @@ def extract(filepath, identifiers):
 		return
 
 	total_submissions_extracted = 0
-	tar_dir = 'latex/' + os.path.splitext(os.path.basename(filepath))[0] + '/'
+	tar_dir = 'latex/' + os.path.splitext(os.path.basename(filepath))[0] 
 	confirmDir(tar_dir)
 		
 	# Open tarfile, read-only
@@ -26,9 +34,8 @@ def extract(filepath, identifiers):
 	tar = tarfile.open(filepath)
 	# Iterate over submissions, extracting only those that belong to the astro-ph category, 
 	# logging which submissions belong to which tarfile
-	confirmDir('logs')
-	with open('logs/tarfile_submission_log.txt', 'a+') as logfile:
-		logfile.write('\n\nTARFILE: {}'.format(os.path.basename(filepath)))
+	with open(tar_dir + '.txt', 'w+') as logfile:
+		logfile.write('TARFILE: {}'.format(os.path.basename(filepath)))
 		for submission in tar.getmembers():
 			submission_id = os.path.splitext(os.path.basename(submission.name))[0]
 			if submission.name.endswith('.gz') and identifiers.str.contains(submission_id).any():
@@ -44,7 +51,6 @@ def extract(filepath, identifiers):
 					for m in gz: 
 						f = gz.extractfile(m)
 						if m.isdir():
-							print(submission_id)
 							continue
 						f_out = f.read()
 						f_in = m.name
@@ -53,8 +59,7 @@ def extract(filepath, identifiers):
 					gz.close()
 					total_submissions_extracted += 1
 				except tarfile.ReadError:
-					if not os.path.isdir('temp'):
-						os.makedirs('temp')
+					confirmDir('temp')
 					tar.extract(submission, 'temp')
 					with gzip.open('temp/' + submission.name, 'rb') as f_in:
 						with open(submission_path + '.tex', 'wb+') as f_out:
@@ -93,7 +98,6 @@ def get_submissions_to_convert(base_path):
 
 	for submission_path in submissions:
 		outpath = get_outpath(submission_path)
-		print('GET SUBMISSIONS TO CONVERT: ' + outpath)
 		logfile_path = 'logs/' + os.path.splitext(os.path.basename(submission_path))[0] + '.txt'
 		if not os.path.isfile(outpath) and not os.path.isfile(logfile_path):
 			submissions_to_convert.append(submission_path)
@@ -116,7 +120,6 @@ def convert(tar_path):
 	for submission in submissions:
 		# Get its outpath
 		outpath = get_outpath(submission)
-		print('CONVERT: ' + outpath)
 		submission_id = os.path.splitext(os.path.basename(outpath))[0]
 		logfile_path = 'logs/' + submission_id + '.txt'
 		try:
@@ -134,6 +137,11 @@ def convert(tar_path):
 			sp.kill()
 		except KeyboardInterrupt:
 			# If I interrupt the conversion, remove the logfile so it can be reattempted
+			print('Removing ' + logfile_path)
+			os.remove(logfile_path)
+			raise
+		except Exception:
+			print('Removing ' + logfile_path)
 			os.remove(logfile_path)
 			raise
 
