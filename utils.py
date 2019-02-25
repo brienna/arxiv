@@ -14,6 +14,19 @@ def confirmDir(dir_name):
 		os.makedirs(dir_name)
 
 
+def get_outpath(inpath):
+	'''
+	Returns the filepath for a XML file,
+	based on the given TEX filepath. 
+	'''
+
+	path_parts = pathlib.Path(inpath).parts
+	arxiv_id = os.path.splitext(path_parts[2])[0]
+	confirmDir('xml')
+	outpath = 'xml/' + arxiv_id + '.xml'
+	return outpath
+
+
 def extract(filepath, identifiers):
 	'''
 	Extracts astro-ph submissions from given tar filepath.
@@ -22,15 +35,16 @@ def extract(filepath, identifiers):
 
 	# Quit if given file is not tarfile
 	if not tarfile.is_tarfile(filepath):
-		print('can\'t unzip {}, not a .tar file'.format(filepath))
+		# print('can\'t unzip {}, not a .tar file'.format(filepath))
 		return
 
 	total_submissions_extracted = 0
 	tar_dir = 'latex/' + os.path.splitext(os.path.basename(filepath))[0] 
 	confirmDir(tar_dir)
+	confirmDir('logs')
 		
 	# Open tarfile, read-only
-	print('Extracting {}'.format(filepath))
+	# print('Extracting {}'.format(filepath))
 	tar = tarfile.open(filepath)
 	# Iterate over submissions, extracting only those that belong to the astro-ph category, 
 	# logging which submissions belong to which tarfile
@@ -38,11 +52,20 @@ def extract(filepath, identifiers):
 		logfile.write('TARFILE: {}'.format(os.path.basename(filepath)))
 		for submission in tar.getmembers():
 			submission_id = os.path.splitext(os.path.basename(submission.name))[0]
-			if submission.name.endswith('.gz') and identifiers.str.contains(submission_id).any():
+			# Note if submission is .pdf, we will skip this
+			if submission.name.endswith('.pdf'):
+				with open('logs/pdf_submissions.txt', 'a+') as pdf_logfile:
+					pdf_logfile.write(submission_id + '\n')
+			elif submission.name.endswith('.gz') and identifiers.str.contains(submission_id).any():
 				logfile.write('\n' + submission_id)
 				submission_path = tar_dir + '/' + submission_id
+				# If it's been converted already, don't bother extracting it
+				if os.path.isfile(get_outpath(submission_path)):
+					# print('{} exists, already extracted and converted {}!'.format(get_outpath(submission_path), submission_id))
+					continue
 				# Extract the submission as a .gzip
-				try:    
+				try:   
+					# print('Extracting {}...'.format(submission_id)) 
 					# Extract and convert to .zip
 					gz_obj = tar.extractfile(submission)
 					gz = tarfile.open(fileobj=gz_obj)
@@ -68,21 +91,8 @@ def extract(filepath, identifiers):
 	tar.close()
 	# Delete the temporary folder for those wonky gz files
 	shutil.rmtree('temp/', ignore_errors=True)
-	print(filepath + ' extraction complete')
-	print('Number of submissions obtained: ' + str(total_submissions_extracted))
-
-
-def get_outpath(inpath):
-	'''
-	Returns the filepath for a XML file,
-	based on the given TEX filepath. 
-	'''
-
-	path_parts = pathlib.Path(inpath).parts
-	arxiv_id = os.path.splitext(path_parts[2])[0]
-	confirmDir('xml')
-	outpath = 'xml/' + arxiv_id + '.xml'
-	return outpath
+	# print(filepath + ' extraction complete')
+	# print('Number of submissions obtained: ' + str(total_submissions_extracted))
 
 
 def get_submissions_to_convert(base_path):
@@ -102,7 +112,7 @@ def get_submissions_to_convert(base_path):
 		if not os.path.isfile(outpath) and not os.path.isfile(logfile_path):
 			submissions_to_convert.append(submission_path)
 
-	print('{} submissions already converted, {} submissions still to be converted...'.format(len(submissions) - len(submissions_to_convert), len(submissions_to_convert)))
+	# print('{} submissions already converted, {} submissions still to be converted...'.format(len(submissions) - len(submissions_to_convert), len(submissions_to_convert)))
 	return submissions_to_convert
 
 
@@ -123,24 +133,18 @@ def convert(tar_path):
 		submission_id = os.path.splitext(os.path.basename(outpath))[0]
 		logfile_path = 'logs/' + submission_id + '.txt'
 		try:
-			print('Converting {} to {}...'.format(submission, outpath))
+			# print('Converting {} to {}...'.format(submission, outpath))
 			with open(logfile_path, 'w+') as logfile:
-				sp.call(['latexmlc', '--dest=' + outpath, submission], timeout=240, stderr=logfile)
+				sp.call(['latexmlc', '--timeout=240', '--dest=' + outpath, submission], stderr=logfile)
 			print('Writing logfile for ' + submission_id)
-		# If conversion has timed out, stop it (or it will eat up memory)
-		# (this usually happens if latexml hangs recursively, as with 
-		# latex/arXiv_src_1009_002/1009.1724/15727_eger.tex)
-		except sp.TimeoutExpired:
-			print('---x Conversion failed: {}'.format(submission))
-			with open('logs/failed_conversions_log.txt', 'a+') as failed_conversions_logfile:
-				failed_conversions_logfile.write(submission_id + '\n')
-			sp.kill()
 		except KeyboardInterrupt:
 			# If I interrupt the conversion, remove the logfile so it can be reattempted
+			print('You interrupted convert()!')
 			print('Removing ' + logfile_path)
 			os.remove(logfile_path)
 			raise
-		except Exception:
+		except Exception as e:
+			print('Something went wrong in convert(): ' + e)
 			print('Removing ' + logfile_path)
 			os.remove(logfile_path)
 			raise
