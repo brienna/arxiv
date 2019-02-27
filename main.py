@@ -43,7 +43,7 @@ def work(key):
 			if len(os.listdir(downloaded_filename)) > 0:
 				utils.convert(downloaded_filename)
 			else:
-				print('Tarfile contains no astro-ph submissions.')
+				print(key + ' contains no astro-ph submissions.')
 			os.remove(key)
 			shutil.rmtree(downloaded_filename, ignore_errors=True)
 			# print('Completed and removed {}'.format(key))

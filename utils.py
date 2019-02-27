@@ -135,8 +135,12 @@ def convert(tar_path):
 		try:
 			# print('Converting {} to {}...'.format(submission, outpath))
 			with open(logfile_path, 'w+') as logfile:
-				sp.call(['latexmlc', '--timeout=240', '--dest=' + outpath, submission], stderr=logfile)
+				sp.call(['latexmlc', '--timeout=240', '--dest=' + outpath, submission], timeout=300, stderr=logfile)
 			print('Writing logfile for ' + submission_id)
+		except sp.TimeoutExpired: # prevents hanging, for now
+			print(submission_id + 'timed out!')
+			with open('logs/failed_conversions_log.txt', 'w+') as failed_logfile:
+				failed_logfile.write(submission_id + '\n')
 		except KeyboardInterrupt:
 			# If I interrupt the conversion, remove the logfile so it can be reattempted
 			print('You interrupted convert()!')
@@ -145,8 +149,6 @@ def convert(tar_path):
 			raise
 		except Exception as e:
 			print('Something went wrong in convert(): ' + e)
-			print('Removing ' + logfile_path)
-			os.remove(logfile_path)
 			raise
 
 
