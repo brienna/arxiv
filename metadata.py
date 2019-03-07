@@ -154,6 +154,7 @@ class Metadata(object):
                                    parse_dates=['date_retrieved'])
         self.identifiers = metadata_df['filename_parsed']
 
+
     def __init__(self, update=False):
         self.metadata_filepath = 'arxiv_metadata_astroph.csv'
         # Automatically check for any updates
