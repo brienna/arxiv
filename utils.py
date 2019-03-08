@@ -3,7 +3,6 @@ import gzip
 import shutil
 import os
 import glob
-import re
 import pathlib
 import zipfile
 import subprocess as sp
