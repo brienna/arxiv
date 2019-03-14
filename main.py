@@ -104,7 +104,7 @@ def work(key):
 def main():
 	# Get identifiers for astro-ph preprints
 	global m
-	m = Metadata(update=False)
+	m = Metadata(update=True)
 	print('Identifiers collected: {}'.format(len(m.identifiers)))
 
 	# Connect to Google Drive

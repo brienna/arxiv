@@ -1,4 +1,4 @@
-import datetime, os, pandas as pd, numpy as np, urllib, time
+import datetime, os, pandas as pd, numpy as np, requests, time, urllib3
 from bs4 import BeautifulSoup
 
 
@@ -30,8 +30,8 @@ class Metadata(object):
             while results == None:
                 try:
                     print('Requesting: ' + url)
-                    results = urllib.request.urlopen(url).read()
-                except urllib.error.HTTPError as e:
+                    results = requests.get(url).text
+                except urllib3.exceptions.HTTPError as e:
                     wait = int(e.headers.get('Retry-After'))
                     print('HTTPError: Waiting ' + str(wait) + 's to retry requesting metadata...')
                     time.sleep(wait)
@@ -90,20 +90,19 @@ class Metadata(object):
                 resumptionToken = resumptionToken.text
                 url = 'http://export.arxiv.org/oai2?verb=ListRecords&resumptionToken=' + resumptionToken
                 time.sleep(20) # avoid 503 status
-            else:
-                # Otherwise, obtain date of last request and the while loop ends here
-                request_date = soup.find('responseDate').text
-            
-        return rows, request_date
+
+        return rows
 
 
     def update(self):
         '''
         Checks if an update is needed. If it is needed, gathers 
         '''
-        if os.path.exists(self.metadata_filepath):
+        metadata_filepath = 'arxiv_metadata_astroph.csv'
+
+        if os.path.exists(metadata_filepath):
             # If the metadata file exists, load it into a data frame
-            existing_metadata_df = pd.read_csv(self.metadata_filepath, 
+            existing_metadata_df = pd.read_csv(metadata_filepath, 
                                                dtype={'filename': str,
                                                       'filename_parsed': str,
                                                       'identifier': str,
@@ -111,35 +110,35 @@ class Metadata(object):
                                                       'doi': str}, 
                                                parse_dates=['date_retrieved'])
             # Get the date of the last request
+            existing_metadata_df['date_retrieved'] = existing_metadata_df['date_retrieved'].apply(lambda x:x.replace(tzinfo=datetime.timezone.utc))
             date_of_last_request = existing_metadata_df['date_retrieved'].max()
-            print(self.metadata_filepath + ' last updated on ' + date_of_last_request.strftime('%Y-%m-%d'))
+            print(metadata_filepath + ' last updated on ' + date_of_last_request.strftime('%Y-%m-%d'))
             print('Updating...')
             # Send a request to access metadata since that date
-            date_to_request = date_of_last_request + datetime.timedelta(days=1)
-            records, request_date = self.request_bulk_metadata(date_to_request)
+            records = self.request_bulk_metadata(date_of_last_request + datetime.timedelta(days=1))
             # Create data frame for records to specify additional info
             if len(records) > 0:
                 print('Number of new records found: ' + str(len(records)))
                 records_df = pd.DataFrame(records)
-                records_df['date_retrieved'] = np.full(len(records_df), request_date)
+                records_df['date_retrieved'] = np.full(len(records_df), datetime.datetime.now())
                 records_df['filename_parsed'] = existing_metadata_df['filename'].str.replace('/', '')
                 # Update metadata file
                 metadata_df = pd.concat([existing_metadata_df, records_df], axis=0, sort=True, ignore_index=True)
-                metadata_df.to_csv(self.metadata_filepath, index=False)
+                metadata_df.to_csv(metadata_filepath, index=False)
                 print('Metadata has been updated.')
             else: 
                 print('No additional records found. Metadata is up to date.')
         else:
             # If the metadata file doesn't exist, request all metadata
-            print(self.metadata_filepath + ' is being created...')
-            records, request_date = self.request_bulk_metadata(None)
+            print(metadata_filepath + ' is being created...')
+            records = request_bulk_metadata(None)
             # Load records into data frame
             metadata_df = pd.DataFrame(records)
             # Add a column to specify additional info
-            metadata_df['date_retrieved'] = np.full(len(metadata_df), request_date)
+            metadata_df['date_retrieved'] = np.full(len(metadata_df), datetime.datetime.now())
             metadata_df['filename_parsed'] = metadata_df['filename'].str.replace('/', '')
             # Save it to CSV
-            metadata_df.to_csv(self.metadata_filepath, index=False)
+            metadata_df.to_csv(metadata_filepath, index=False)
             print('Metadata has been saved.')
 
 
