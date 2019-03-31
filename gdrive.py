@@ -63,8 +63,11 @@ class Gdrive(object):
 	    return tars
 
 	def upload(self, filepath):
+	    query = "'root' in parents and trashed=false and title='arxiv' and mimeType='application/vnd.google-apps.folder'"
+	    arxiv_folder_id = self.drive.ListFile({'q': query}).GetList()[0].metadata['id']
+
 	    print("Uploading " + filepath + " to Google Drive...")
-	    file = drive.CreateFile({'title': os.path.basename(filepath),
+	    file = self.drive.CreateFile({'title': os.path.basename(filepath),
 	                             'parents': [{'id': arxiv_folder_id}], # place it into arxiv folder
 	                             'mimeType': 'application/gzip'})
 	    file.SetContentFile(filepath)

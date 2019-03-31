@@ -1,4 +1,4 @@
-import configparser, boto3, botocore
+import configparser, boto3, botocore, os
 
 
 class Amazon_S3(object):
