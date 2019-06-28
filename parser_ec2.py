@@ -10,6 +10,12 @@ import multiprocessing as mp
 import time
 
 class Parser(object):
+    '''
+    Parses corpus, utilizing multiprocessing.
+    Input: XML files from ./xml/
+    Output: Parsed .npy files into ./corpus/ 
+    '''
+
     soup = None
     parenthetical_citations = 0
     intext_citations = 0
@@ -103,7 +109,7 @@ class Parser(object):
 
     def parse(self, xml_path):
         '''
-        Parses XML file at given path.
+        Parses full XML file at given path.
         '''
 
         fulltext = ''
@@ -130,6 +136,38 @@ class Parser(object):
         # print('Num parenthetical citations removed: ' + str(self.parenthetical_citations))
         # print('Num in-text citations rendered: ' + str(self.intext_citations))
         return fulltext
+
+    def getAbstract(document):
+        '''
+        Returns cleaned abstract from passed document, a BeautifulSoup 'document' node.
+        This needs to be fixed before it can be used, it was transferred from old code and has not been used yet.
+        We need to better target the abstract node, as 'document' node is not always present. 
+        Returns none if no abstract found.
+        '''
+
+        stopwords = json.load(open('stopwords.json', 'r'))
+        text = ""
+
+        abstract = document.find('abstract', recursive=False)
+        
+        if abstract:
+            # Don't handle any math right now
+            math = abstract.find('Math')
+            if math:
+                math.decompose()
+
+            # Get text, remove newlines caused by nested TeX elements, and lowercase
+            text = abstract.get_text().replace('\n', ' ').lower()
+            text.lower()
+
+            # Remove stopwords
+            cleaned_text = ' '.join([word for word in text.split() if word not in stopwords])
+            
+            return cleaned_text
+            # Add cleaned abstract to corpus
+            # corpus.write('\n\n' + cleaned_text)
+
+        return None
     
     
     def cleanse(self, doc):
@@ -143,10 +181,6 @@ class Parser(object):
         tokens = ['<num>' if num_pattern.match(x) else '<latex>' if x == 'latex_metatoken' else x for x in tokenizer.tokenize(doc)]
         return tokens
         
-        
-
-
-
 def work(xf):
     print('{} is working on {}...'.format(mp.current_process(), xf))
     try:
@@ -196,9 +230,21 @@ def main():
         print('The end.')
 
 if __name__ == '__main__':
+    '''
+    Runs if script called on command line
+    '''
+
+    # with multiprocessing
     starttime = time.time()
     main()
     print('That took {} seconds'.format(time.time() - starttime))
+
+    # without multiprocessing
+    #starttime = time.time()
+    #tasks = glob.glob('xml/*[.xml]')
+    #for task in tasks:
+    #    work(task)
+    #print('That took {} seconds'.format(time.time() - starttime))
 
 
 

@@ -1,3 +1,7 @@
+# Files
+
+parser_ec2.py — Parses corpus of XML files into .npy files for model training.
+
 # How to bulk access arXiv full-texts
 
 Since its inception in 1991, arXiv, the main database for scientific preprints, has received almost [1.3 million submissions](https://arxiv.org/help/stats/2017_by_area/index). All of this data can be useful in analysis, so we may want to be able to access the full-texts in bulk. This post goes over how we can do this using Python 3 and the command line. 
